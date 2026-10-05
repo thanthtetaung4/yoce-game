@@ -1,26 +1,39 @@
 import * as THREE from 'three';
 import { clamp, damp, dampAngle, isTouch } from '../utils.js';
 
-// Third-person camera that trails behind the character and looks down the path.
+// Third-person camera that trails behind the character, turning to wherever she faces.
 // Drag to look around; it drifts back behind her once you start walking again.
+// When a hedge would hide her (round a corner of the maze), it rises up and peeks over the top.
 export function createFollowCamera(camera, path) {
   const target = new THREE.Vector3();
   const look = new THREE.Vector3();
   const desired = new THREE.Vector3();
   const baseDist = isTouch ? 6.8 : 6.2;
-  const state = { yaw: Math.PI, offset: 0, pitch: 0.36, dist: baseDist, distTarget: baseDist, idle: 0, cinematic: false, u: 0 };
+  const basePitch = 0.44;
+  const maze = path.maze;
+  const state = { yaw: Math.PI, offset: 0, pitch: basePitch, dist: baseDist, distTarget: baseDist, idle: 0, cinematic: false, facing: Math.PI, lift: 0 };
 
-  function pathYaw(u) {
-    const f = path.frameAt(Math.min(1, u + 0.008));
-    return Math.atan2(f.tan.x, f.tan.z);
+  // would a hedge sit between her and a camera at this yaw/pitch/distance?
+  function hidden(p, yaw, pitch, dist) {
+    const cp = Math.cos(pitch), top = maze.hedgeHeight + 0.7;
+    for (let t = 0.2; t <= 1.001; t += 0.1) {
+      const y = 1.15 + (Math.sin(pitch) * dist - 0.05) * t;
+      if (y > top) break;
+      if (!maze.walkable(p.x - Math.sin(yaw) * dist * cp * t, p.z - Math.cos(yaw) * dist * cp * t, 0.3)) return true;
+    }
+    return false;
   }
 
   function place(playerPos, k, dt) {
-    const cp = Math.cos(state.pitch);
+    const blocked = hidden(playerPos, state.yaw, state.pitch, state.dist);
+    state.lift = k === Infinity ? +blocked : damp(state.lift, +blocked, blocked ? 5 : 1.2, dt);
+    const pitch = state.pitch + (Math.max(state.pitch, 1.0) - state.pitch) * state.lift;
+    const dist = state.dist * (1 - 0.18 * state.lift);
+    const cp = Math.cos(pitch);
     desired.set(
-      playerPos.x - Math.sin(state.yaw) * state.dist * cp,
-      playerPos.y + 1.1 + Math.sin(state.pitch) * state.dist,
-      playerPos.z - Math.cos(state.yaw) * state.dist * cp,
+      playerPos.x - Math.sin(state.yaw) * dist * cp,
+      playerPos.y + 1.1 + Math.sin(pitch) * dist,
+      playerPos.z - Math.cos(state.yaw) * dist * cp,
     );
     target.set(playerPos.x + Math.sin(state.yaw) * 1.6, playerPos.y + 1.15, playerPos.z + Math.cos(state.yaw) * 1.6);
     if (k === Infinity) { camera.position.copy(desired); look.copy(target); }
@@ -34,18 +47,18 @@ export function createFollowCamera(camera, path) {
   }
 
   return {
-    // Direction the controls use. While an idle shot has the camera in front of her, forward still means 'along the path'.
-    get yaw() { return state.cinematic ? pathYaw(state.u) : state.yaw; },
-    // Swing the camera around her (yaw offset from behind, in radians) and/or move it closer — used by idle animations.
+    // Direction the controls use. While an idle shot has the camera in front of her, forward still means 'the way she faces'.
+    get yaw() { return state.cinematic ? state.facing : state.yaw; },
+    // Swing the camera around her (yaw offset from behind her, in radians) and/or move it closer — used by idle animations.
     // Walking again eases it back behind her.
     frame(offset, dist = baseDist) { state.offset = offset; state.distTarget = dist; state.idle = 0; state.cinematic = true; },
-    snap(playerPos, u) {
-      state.offset = 0; state.pitch = 0.36; state.dist = state.distTarget = baseDist; state.cinematic = false; state.u = u;
-      state.yaw = pathYaw(u);
+    snap(playerPos, facing) {
+      state.offset = 0; state.pitch = basePitch; state.dist = state.distTarget = baseDist; state.cinematic = false; state.facing = facing;
+      state.yaw = facing;
       place(playerPos, Infinity, 0);
     },
-    update(dt, playerPos, u, lookInput, moving) {
-      state.u = u;
+    update(dt, playerPos, facing, lookInput, moving) {
+      state.facing = facing;
       if (lookInput.dx || lookInput.dy) {
         state.cinematic = false; // she took the camera
         state.offset -= lookInput.dx * 0.006;
@@ -56,8 +69,10 @@ export function createFollowCamera(camera, path) {
       if (moving && state.idle > 1.2) state.offset = damp(state.offset, 0, 1.4, dt);
       if (moving) state.distTarget = baseDist;
       state.dist = damp(state.dist, state.distTarget, 2.5, dt);
-      const goal = pathYaw(u) + state.offset;
-      state.yaw = dampAngle(state.yaw, goal, lookInput.active ? 20 : 3, dt);
+      const goal = facing + state.offset;
+      // while she walks back toward the camera, hold still (chasing her would just spin her in circles)
+      const toward = Math.abs(Math.atan2(Math.sin(facing - state.yaw), Math.cos(facing - state.yaw))) > 2.0;
+      state.yaw = dampAngle(state.yaw, goal, lookInput.active ? 20 : toward && moving ? 0 : 3, dt);
       if (state.cinematic && Math.abs(state.offset) < 0.3 && Math.abs(Math.atan2(Math.sin(goal - state.yaw), Math.cos(goal - state.yaw))) < 0.3) state.cinematic = false;
       place(playerPos, 6, dt);
     },

@@ -44,6 +44,8 @@ export function createHud({ total, trialsTotal, onMute, muted }) {
       task.classList.toggle('is-done', done);
     },
     setProgress(u) { bar.style.transform = `scaleX(${Math.max(0, Math.min(1, u))})`; },
+    // the phone emote button (removed on desktop, where Space does it)
+    onEmoteTap(cb) { $('#emote-btn')?.addEventListener('click', (e) => { e.preventDefault(); cb(); }); },
     // the prompt pill is a button: tapping it opens whatever is nearby
     onPromptTap(cb) {
       prompt.addEventListener('click', (e) => { if (prompt.classList.contains('is-visible')) { e.preventDefault(); cb(); } });

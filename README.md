@@ -1,8 +1,9 @@
 # Happy 21st, Yoce 🎂
 
-A little 3D walk through Yoce's year as a princess in an enchanted pastel forest. Each month of the path has
-its own enchanted season (amber glow, frost and crystals, blossoms, a firefly glade). Find the glowing memories
-along the way, then follow the path to the cake in the fairy-ring clearing at the end.
+A little 3D walk through Yoce's year as a princess in an enchanted pastel hedge maze. The main route winds
+through the maze one month at a time, each with its own season (amber glow, frost and crystals, blossoms, a firefly glade).
+Each glowing memory hides in a little nook off the route (look for its beam of light over the hedges), and the dead ends
+hold small surprises. Once every memory is found, the gate opens to the cake in the fairy-ring clearing at the heart of the maze.
 
 Built with Vite, plain JavaScript and Three.js. It has no 3D model files: everything is made from simple shapes.
 
@@ -61,6 +62,8 @@ If a file name isn't found, a pastel placeholder is shown instead and the browse
 - `requireAllMemories`: the birthday gate stays closed until every memory has been opened. Set it to `false` to remove the gate.
 - `startMonth`: the first month of the path. The 12 month signposts are generated from it.
 - `walkSpeed`, `zoneLength`, `pathHalfWidth`, `interactDistance`: controls for how the walk feels.
+- `mazeCell`, `hedgeHeight`: the size of the maze grid and how tall the hedges are. The layout is generated
+  the same way every visit; the main route is about `zoneLength` metres per month.
 
 Progress is saved in the browser, so a reload keeps the memories already found. "Walk the year again" at the end clears it.
 
@@ -85,10 +88,10 @@ src/main.js              boot, game states, the single animation loop
 src/config.js            settings + palette
 src/data/                story.js, memories.js, photos.js (generated)
 src/scene/setup.js       renderer, camera, lights, fog, gradient sky, adaptive resolution
-src/world/               path.js (the winding path), zones.js (months/seasons), world.js (ground,
-                         path, signposts, gate, plaza), props.js (instanced trees/flowers/hearts/…),
+src/world/               path.js (the maze + its main route), zones.js (months/seasons), world.js (ground,
+                         hedges, floor, signposts, gate, plaza), props.js (instanced trees/flowers/hearts/…),
                          ambient.js (seasonal particles + sky tint), points.js (sprite shader)
-src/player/              character.js (princess + animations + sparkle trail), idle.js (idle scenes), player.js (movement, path edges), controls.js
+src/player/              character.js (princess + animations + sparkle trail), idle.js (idle scenes), player.js (movement, hedge collisions), controls.js
 src/camera/follow.js     third-person follow camera
 src/memories/markers.js  floating polaroids, glow, raycast picking
 src/ending/ending.js     cake, number candles, confetti, balloons, cinematic camera

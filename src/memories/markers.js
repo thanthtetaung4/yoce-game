@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CONFIG, PALETTE } from '../config.js';
 import { photoInfo, photoSrc, canvasTexture, glowTexture, placeholderTexture, heartShape, damp, dampAngle, pickOnScreen } from '../utils.js';
 
-// Floating polaroids along the path. They glow when you get close and get a heart once visited.
+// Floating polaroids, tucked into dead-end nooks of the maze. They glow when you get close and get a heart once visited.
 export function createMemoryMarkers(path, memories, manager) {
   const group = new THREE.Group();
   const loader = new THREE.TextureLoader(manager);
@@ -27,7 +27,8 @@ export function createMemoryMarkers(path, memories, manager) {
   const items = memories.map((mem, i) => {
     const u = path.uOfZone(mem.zone, mem.at);
     const sideSign = mem.side === 'left' ? -1 : mem.side === 'right' ? 1 : i % 2 ? 1 : -1;
-    const anchor = path.placeAt(u, sideSign * (hw + 0.9));
+    // in its own nook off the main route, or (if the maze had no room) against the hedge beside it
+    const anchor = path.nooks?.[i]?.pos.clone() || path.placeAt(u, sideSign * (hw - 0.5));
 
     const root = new THREE.Group();
     root.position.copy(anchor);

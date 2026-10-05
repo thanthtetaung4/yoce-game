@@ -9,8 +9,10 @@ export const CONFIG = {
   birthdayLabel: 'Today ♡',
 
   // World size + movement
-  zoneLength: 30,        // length of each month along the path
-  pathHalfWidth: 2.6,    // the walkable path is twice this wide
+  zoneLength: 30,        // roughly how long each month of the maze's main route is
+  mazeCell: 8,           // the maze is a grid of cells this many metres across
+  hedgeHeight: 2.3,
+  pathHalfWidth: 2.6,    // the corridors are twice this wide
   walkSpeed: 5.4,
   fastMultiplier: 1.8,   // hold Shift (or push the phone joystick to the edge) to hurry
   interactDistance: 4.6, // how close you need to be for the "open memory" prompt

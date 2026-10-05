@@ -119,7 +119,7 @@ function lanterns(ctx) {
   const items = [];
   for (let k = 0; k < count; k++) {
     const g = new THREE.Group();
-    g.position.copy(path.placeAt(uAt(ctx, k, count), (k % 2 ? 1 : -1) * (hw + 0.35)));
+    g.position.copy(path.placeAt(uAt(ctx, k, count), (k % 2 ? 1 : -1) * (hw - 0.3)));
     const box = new THREE.Mesh(boxGeo, darkMat);
     const glow = glowSprite('#ffd38a', 2.2, 0.9);
     glow.position.y = 1.9; glow.visible = false;
@@ -327,7 +327,7 @@ function shards(ctx) {
 
 /* ---------- Catch the fireflies (click) ---------- */
 function fireflies(ctx) {
-  const { group, count, path, rand } = ctx;
+  const { group, count, path, rand, hw } = ctx;
   const bodyGeo = new THREE.SphereGeometry(0.12, 10, 8);
   const bodyMat = new THREE.MeshBasicMaterial({ color: '#fff5a8', toneMapped: false });
   const items = [];
@@ -335,7 +335,7 @@ function fireflies(ctx) {
     const g = new THREE.Group();
     const hit = hitSphere(0.75);
     g.add(new THREE.Mesh(bodyGeo, bodyMat), glowSprite('#fff0a0', 1.6, 0.9), hit);
-    const anchor = path.placeAt(uAt(ctx, k, count), (rand() - 0.5) * 9, 1.8 + rand() * 1.6);
+    const anchor = path.placeAt(uAt(ctx, k, count), (rand() - 0.5) * 2 * (hw - 0.5), 1.8 + rand() * 1.6);
     g.position.copy(anchor);
     group.add(g);
     items.push({ g, hit, anchor, caught: false, t: 0, a: 0.6 + rand() * 0.6, b: 0.9 + rand() * 0.8, ph: rand() * 6 });
@@ -344,7 +344,7 @@ function fireflies(ctx) {
   const settled = [];
   for (let k = 0; k < count * 2; k++) {
     const s = glowSprite('#fff0a0', 0.9, 0.85);
-    s.position.copy(path.placeAt(ctx.path.uOfZone(ctx.zone, 0.15 + 0.8 * rand()), (rand() - 0.5) * 12, 1 + rand() * 3));
+    s.position.copy(path.placeAt(ctx.path.uOfZone(ctx.zone, 0.15 + 0.8 * rand()), (rand() - 0.5) * 2 * hw, 1 + rand() * 3));
     s.userData.base = s.position.clone(); s.userData.ph = rand() * 6;
     s.visible = false;
     group.add(s);

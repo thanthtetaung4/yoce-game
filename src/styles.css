@@ -190,6 +190,24 @@ kbd {
 .hud__bar span { display: block; height: 100%; transform: scaleX(0); transform-origin: 0 50%;
   background: linear-gradient(90deg, var(--peach-deep), var(--rose), var(--lavender-deep)); border-radius: 0 4px 4px 0; transition: transform .3s linear; }
 
+/* emote button on phones (bottom-right, clear of the walking joystick on the left) */
+.emote-btn { position: fixed; right: var(--gutter); bottom: calc(var(--gutter) + 8px + var(--safe-b)); width: 52px; height: 52px; touch-action: manipulation; }
+.emote-btn svg { width: 26px; height: 26px; fill: #ee8fab; stroke: none; }
+.emote-btn:active { transform: scale(.92); }
+
+/* keybindings, tucked into the bottom-left corner */
+.keys {
+  position: fixed; left: var(--gutter); bottom: calc(var(--gutter) + var(--safe-b)); margin: 0;
+  display: grid; gap: 4px; padding: 10px 12px; border-radius: 14px;
+  background: rgba(255,253,251,.72); box-shadow: var(--shadow);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  font-size: .78rem; color: var(--ink-soft); opacity: .85;
+}
+.keys div { display: flex; align-items: center; gap: 8px; }
+.keys dt { display: flex; gap: 3px; min-width: 92px; font-weight: 700; color: var(--ink); }
+.keys dd { margin: 0; }
+.keys kbd { min-width: 1.5em; padding: 0 5px; font-size: .72rem; }
+
 .prompt, .toast {
   position: fixed; left: 50%; z-index: 12; pointer-events: none;
   padding: 10px 18px; border-radius: 999px; max-width: calc(100vw - 32px);

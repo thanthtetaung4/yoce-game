@@ -3,13 +3,12 @@ import { CONFIG } from '../config.js';
 import { dampAngle } from '../utils.js';
 import { createCharacter } from './character.js';
 
-// Moves the character relative to the camera and keeps her on the path with soft edges.
+// Moves the character relative to the camera and keeps her inside the maze's corridors.
 export function createPlayer(path) {
   const character = createCharacter();
   const pos = new THREE.Vector3();
   const move = new THREE.Vector3();
   const _v = new THREE.Vector3();
-  const hw = CONFIG.pathHalfWidth;
   const state = { u: 0, hint: -1, facing: Math.PI, speed01: 0, run: 0, blocked: false, near: null };
 
   function reset() {
@@ -32,31 +31,19 @@ export function createPlayer(path) {
     state.run += (run - state.run) * Math.min(1, dt * 8); // ease into and out of the faster pace
     pos.addScaledVector(move, CONFIG.walkSpeed * (1 + (CONFIG.fastMultiplier - 1) * state.run) * dt);
 
-    // soft edges: a gentle pull back inside, with a firm limit just past the edge
+    // the hedges: slide along them instead of walking through
+    path.maze.keepInside(pos);
     let n = path.nearest(pos, state.hint);
-    const soft = hw - 0.35, hard = hw + 0.2;
-    const a = Math.abs(n.lateral);
-    if (a > soft) {
-      const sign = Math.sign(n.lateral);
-      const push = a > hard ? a - hard : (a - soft) * Math.min(1, dt * 10);
-      pos.addScaledVector(n.right, -sign * push);
-    }
-
-    // start of the path
-    _v.subVectors(pos, n.point);
-    if (n.index === 0) {
-      const back = _v.dot(n.tan);
-      if (back < 0) pos.addScaledVector(n.tan, -back);
-    }
 
     // the birthday gate stays closed until every memory is found
     state.blocked = false;
-    if (gateLocked) {
+    if (gateLocked && Math.abs(n.u - path.gateU) * path.total < 12) {
       const g = path.frameAt(path.gateU - 0.004);
       const over = _v.subVectors(pos, g.pos).dot(g.tan);
       if (over > 0) { pos.addScaledVector(g.tan, -over); state.blocked = mag > 0.1; }
     }
 
+    path.maze.keepInside(pos);
     n = path.nearest(pos, n.index);
     state.hint = n.index;
     state.u = n.u;

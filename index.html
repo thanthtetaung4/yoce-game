@@ -41,7 +41,7 @@
       <div class="title__how">
         <ul>
           <li class="only-desktop"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrow keys to walk · hold <kbd>Shift</kbd> to hurry · drag to look around</li>
-          <li class="only-desktop">Click a glowing photo (or press <kbd>E</kbd>) to open a memory</li>
+          <li class="only-desktop">Click a glowing photo (or press <kbd>E</kbd>) to open a memory · <kbd>Space</kbd> for a little emote</li>
           <li class="only-touch">Hold the left side of the screen to walk (push to the edge to hurry) · drag on the right to look</li>
           <li class="only-touch">Tap a glowing photo to open a memory</li>
           <li>Glowing rune stones ✦ hold little trials from the hardest months</li>
@@ -66,6 +66,16 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path class="spk" d="M4 9h3l5-4v14l-5-4H4z"/><path class="on" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"/><path class="off" d="M16 9l6 6M22 9l-6 6"/></svg>
     </button>
     <div id="hud-bar" class="hud__bar" aria-hidden="true"><span></span></div>
+    <button id="emote-btn" class="icon-btn emote-btn only-touch" type="button" aria-label="Play an emote">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15.5l.8 1.7 1.7.8-1.7.8-.8 1.7-.8-1.7-1.7-.8 1.7-.8z"/></svg>
+    </button>
+    <dl class="keys only-desktop" aria-label="Controls">
+      <div><dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>walk</dd></div>
+      <div><dt><kbd>Shift</kbd></dt><dd>hurry</dd></div>
+      <div><dt>drag</dt><dd>look around</dd></div>
+      <div><dt><kbd>E</kbd></dt><dd>open memory · trial</dd></div>
+      <div><dt><kbd>Space</kbd></dt><dd>emote</dd></div>
+    </dl>
   </div>
   <button id="prompt" class="prompt" type="button" aria-live="polite"></button>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>

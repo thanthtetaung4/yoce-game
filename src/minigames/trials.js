@@ -31,9 +31,12 @@ export function createTrials(path, { onProgress, onComplete }) {
   const items = TRIALS.map((def, i) => {
     const stoneU = path.uOfZone(def.zone, 0.12);
     const root = new THREE.Group();
-    root.position.copy(path.placeAt(stoneU, hw + 1.1)); // right side, across from the month signpost
+    // against the hedge on the right (across from the month signpost), or the left if a passage opens there
+    const probe = path.placeAt(stoneU, hw + 0.9);
+    const side = path.maze.walkable(probe.x, probe.z) ? -1 : 1;
+    root.position.copy(path.placeAt(stoneU, side * (hw - 0.6)));
     const f = path.frameAt(stoneU);
-    const d = f.tan.clone().negate().addScaledVector(f.right, -0.6);
+    const d = f.tan.clone().negate().addScaledVector(f.right, -side * 0.6);
     root.rotation.y = Math.atan2(d.x, d.z);
 
     const stone = new THREE.Mesh(stoneGeo, stoneMat.clone());

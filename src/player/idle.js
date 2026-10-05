@@ -7,7 +7,7 @@ import { clamp, ease, lerp, smoothstep, heartShape, glowTexture } from '../utils
 //   mirror · takes out a hand mirror, fixes her hair, puts on lipstick, winks
 //   car    · a little pastel car pops up and she drives a lap around the spot
 //   code   · a chair, desk and laptop pop up and she codes until the build passes
-// Walking cancels whatever is playing and everything pops away.
+// Walking cancels whatever is playing and everything pops away. Space plays them on demand as emotes.
 const IDLE_AFTER = [5, 8];   // seconds of standing still before one starts
 const REST_AFTER = [9, 14];  // pause before the next one
 
@@ -163,18 +163,39 @@ export function createIdle({ player, path, follow, audio, gateLocked }) {
 
   const carAnim = {
     name: 'car', duration: 10,
-    camera: { yaw: 0.25, dist: 7.8, relativeToPath: true }, // from behind, so the trees beside the path don't block it
+    camera: { yaw: 0.25, dist: 7.8, relativeToPath: false }, // from behind the lap (set by plan())
+    // a closed loop that starts and ends where she stands. It tries the way she's facing first, then other
+    // directions, and shrinks the car (and her with it) until the whole lap fits between the hedges.
+    plan() {
+      const pos = player.position;
+      const n = path.nearest(pos, player.state.hint);
+      const routeYaw = Math.atan2(n.tan.x, n.tan.z);
+      const f = player.state.facing;
+      const headings = [f, routeYaw, routeYaw + Math.PI, f + Math.PI, f + Math.PI / 2, f - Math.PI / 2];
+      const F = new THREE.Vector3(), R = new THREE.Vector3();
+      for (const k of [1, 0.85, 0.72, 0.6, 0.5, 0.42, 0.35]) {
+        for (const yaw of headings) {
+          F.set(Math.sin(yaw), 0, Math.cos(yaw)); R.set(-F.z, 0, F.x);
+          const at = (d, lat) => pos.clone().addScaledVector(F, d * k).addScaledVector(R, lat * k).setY(0);
+          const pts = [at(0, 0), at(2.6, 1.4), at(5.6, 0), at(2.6, -1.4)];
+          // the lap mustn't end up past a locked birthday gate
+          if (gateLocked() && pts.some((p) => path.nearest(p, n.index).u > path.gateU - 0.004)) continue;
+          const curve = new THREE.CatmullRomCurve3(pts, true, 'centripetal');
+          // the car is ~0.7 m wide either side of its middle at full size; keep that clear of the hedge faces
+          const margin = 0.2 - 0.75 * k;
+          let clear = true;
+          for (let s = 0; s < 1 && clear; s += 0.025) { const p = curve.getPointAt(s); clear = path.maze.walkable(p.x, p.z, margin); }
+          if (!clear) continue;
+          // camera behind the lap, measured from the way she faces now
+          const camera = { yaw: yaw - f + 0.25, dist: 7.8 * Math.max(0.65, k), relativeToPath: false };
+          return { start0: pts[0], curve, k, camera };
+        }
+      }
+      return null;
+    },
+    ok() { return !!this.plan(); },
     start() {
-      // a closed loop just ahead (or behind, near the end / a locked gate) that starts and ends where she stands
-      const n = path.nearest(player.position);
-      const ahead = 6.5 / path.total;
-      let dir = n.u > 0.9 ? -1 : 1;
-      if (dir > 0 && gateLocked() && n.u + ahead > path.gateU - 0.004) dir = -1;
-      if (dir < 0 && n.u - ahead < 0.005) dir = 1;
-      const lat0 = clamp(n.lateral, -(hw - 0.9), hw - 0.9);
-      const at = (d, lat) => path.placeAt(clamp(n.u + (dir * d) / path.total, 0.002, 0.999), lat);
-      this.start0 = at(0, lat0);
-      this.curve = new THREE.CatmullRomCurve3([this.start0, at(2.6, 1.4), at(5.6, 0), at(2.6, -1.4)], true, 'centripetal');
+      Object.assign(this, this.plan());
       this.len = this.curve.getLength();
       car.root.visible = true;
       car.root.position.copy(this.start0);
@@ -186,7 +207,7 @@ export function createIdle({ player, path, follow, audio, gateLocked }) {
       burst.emit(this.start0.clone().setY(0.6), 24, ['#f7a8c4', '#fff0a6', '#ffffff']);
     },
     update(t, dt) {
-      pop(car.root, t * 2.2, 1.3);
+      pop(car.root, t * 2.2, 1.3 * this.k);
       const DRIVE0 = 1.1, DRIVE1 = 8.3;
       const k = ease.inOutCubic(clamp((t - DRIVE0) / (DRIVE1 - DRIVE0), 0, 1));
       const s = k; // fraction of the lap
@@ -199,7 +220,7 @@ export function createIdle({ player, path, follow, audio, gateLocked }) {
       }
       const moved = (s - this.lastS) * this.len;
       this.lastS = s;
-      car.wheels.forEach((w) => { w.rotation.x += moved / 0.2; });
+      car.wheels.forEach((w) => { w.rotation.x += moved / (0.26 * this.k); });
       car.body.position.y = Math.abs(Math.sin(t * 14)) * 0.025 * (moved > 0.001 ? 1 : 0);
       car.body.rotation.z = (moved > 0.001 ? Math.sin(t * 3) * 0.03 : 0);
       if (moved > 0.02 && Math.random() < 0.5) burst.emit(worldOf(car.root, 0, 0.3, -1), 1, ['#ffd1e3', '#fff0a6', '#dccdf4']);
@@ -211,6 +232,8 @@ export function createIdle({ player, path, follow, audio, gateLocked }) {
       const seat = car.root.localToWorld(v.copy(SEAT).add(car.body.position));
       const riding = hopIn >= 1 && hopOut <= 0;
       const root = rig.root;
+      // she shrinks to fit a smaller car while she rides
+      if (this.k < 1) root.scale.setScalar(lerp(1, this.k, hopIn) + (1 - this.k) * hopOut);
       if (hopOut > 0) {
         root.position.lerpVectors(seat, this.start0, hopOut);
         root.position.y += Math.sin(hopOut * Math.PI) * 0.6;
@@ -238,6 +261,7 @@ export function createIdle({ player, path, follow, audio, gateLocked }) {
     },
     stop(cancelled) {
       this.gone = false;
+      rig.root.scale.setScalar(1);
       rig.gown.visible = true;
       rig.legs.forEach((l) => { l.visible = true; });
       if (car.root.visible) popAway(car.root);
@@ -460,11 +484,11 @@ export function createIdle({ player, path, follow, audio, gateLocked }) {
     const pathYaw = Math.atan2(f.tan.x, f.tan.z);
     // camera.yaw is the direction the camera looks: facing + π looks back at her face
     const goal = anim.camera.relativeToPath ? pathYaw + anim.camera.yaw : player.state.facing + anim.camera.yaw;
-    const off = goal - pathYaw;
+    const off = goal - player.state.facing; // the camera's offsets are measured from behind her
     follow.frame(Math.atan2(Math.sin(off), Math.cos(off)), anim.camera.dist);
   }
   function start() {
-    const pool = ANIMS.filter((a) => a.name !== lastName);
+    const pool = ANIMS.filter((a) => a.name !== lastName && (!a.ok || a.ok()));
     cur = pool[Math.floor(Math.random() * pool.length)];
     lastName = cur.name;
     curT = 0;
@@ -506,6 +530,16 @@ export function createIdle({ player, path, follow, audio, gateLocked }) {
       burst.update(dt, renderer);
     },
     cancel() { stop(true); idleT = 0; },
+    // an emote on demand: the next one in turn (skipping any that won't fit here, like the car beside a hedge)
+    emote() {
+      const from = Math.max(0, ANIMS.findIndex((a) => a.name === (cur?.name || lastName)));
+      const next = [1, 2, 3].map((k) => ANIMS[(from + k) % ANIMS.length]).find((a) => !a.ok || a.ok());
+      if (!next) return;
+      stop(true);
+      cur = next; lastName = next.name; curT = 0;
+      cur.start();
+      frameCamera(cur);
+    },
     // dev: play one right now
     play(name) { stop(true); cur = ANIMS.find((a) => a.name === name) || null; if (cur) { lastName = name; curT = 0; cur.start(); frameCamera(cur); } },
   };

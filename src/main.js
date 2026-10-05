@@ -47,7 +47,8 @@ fontP = 1; setLoad();
 /* ---------- Build the world ---------- */
 const sceneCtx = createScene(canvas);
 const { renderer, scene, camera } = sceneCtx;
-const path = createPath();
+// each memory gets its own little nook in the maze, near its spot on the route
+const path = createPath({ nooks: MEMORIES.map((m) => (m.zone + m.at) / ZONES.length) });
 const world = createWorld(path);
 const markers = createMemoryMarkers(path, MEMORIES, manager);
 const trials = createTrials(path, {
@@ -186,6 +187,7 @@ const controls = createControls(canvas, {
     canvas.classList.toggle('is-hover', !!markers.pick(x, y, camera) || trials.hovering(x, y, camera));
   },
   onInteract: interact,
+  onEmote() { if (state === 'play') idle.emote(); },
 });
 // open whatever is close by: the E key, or tapping the prompt pill
 function interact() {
@@ -195,6 +197,7 @@ function interact() {
   else if (nearest) openMemory(nearest);
 }
 hud.onPromptTap(interact);
+hud.onEmoteTap(() => { if (state === 'play') idle.emote(); });
 
 /* ---------- Ending ---------- */
 function startEnding() {
@@ -212,7 +215,7 @@ function replay() {
   markers.items.forEach((it) => markers.setVisited(it, false));
   world.setGateOpen(!gateLocked(), true);
   player.reset();
-  follow.snap(player.position, player.state.u);
+  follow.snap(player.position, player.state.facing);
   hud.setFound(0);
   trials.reset();
   saveTrials();
@@ -240,7 +243,7 @@ function frame(now) {
     const f = path.frameAt(u);
     const yaw = Math.atan2(f.tan.x, f.tan.z) + Math.sin(time * 0.15) * 0.55;
     const r = isTouch ? 6.5 : 5.2;
-    camera.position.set(player.position.x + Math.sin(yaw) * r, 2.3, player.position.z + Math.cos(yaw) * r);
+    camera.position.set(player.position.x + Math.sin(yaw) * r, 3.2, player.position.z + Math.cos(yaw) * r);
     camera.lookAt(titleLook.copy(player.position).setY(1.1));
     player.character.update(dt, 0);
   } else if (state === 'play') {
@@ -248,14 +251,14 @@ function frame(now) {
     const moving = Math.hypot(input.x, input.y) > 0.05;
     player.update(dt, input, follow.yaw, { gateLocked: gateLocked() });
     idle.update(dt, { allowed: true, moving, renderer });
-    follow.update(dt, player.position, player.state.u, controls.takeLook(), moving);
+    follow.update(dt, player.position, player.state.facing, controls.takeLook(), moving);
     blockedCooldown -= dt;
     if (player.state.blocked && blockedCooldown <= 0) {
       const left = markers.items.length - foundCount();
       hud.toast(`Find every memory first ♡ (${left} to go)`, 2400);
       blockedCooldown = 3;
     }
-    if (!gateLocked() && player.state.u > 0.972) startEnding();
+    if (!gateLocked() && player.state.u > path.finaleU) startEnding();
   } else if (state === 'memory' || state === 'card') {
     player.character.update(dt, 0);
     controls.takeLook();
@@ -311,7 +314,7 @@ screens.setProgress(1);
 state = 'title';
 screens.showTitle(() => {
   audio.unlock();
-  follow.snap(player.position, player.state.u);
+  follow.snap(player.position, player.state.facing);
   hud.show(true);
   hud.setMonth(ZONES[0].label);
   state = 'play';
@@ -322,7 +325,11 @@ screens.showTitle(() => {
 // Dev-only helpers for testing in the console (stripped from production builds)
 if (import.meta.env.DEV) {
   window.__game = {
-    teleport(u) { player.position.copy(path.frameAt(u).pos); player.state.hint = -1; follow.snap(player.position, u); },
+    teleport(u) {
+      const f = path.frameAt(u);
+      player.position.copy(f.pos); player.state.hint = -1; player.state.facing = Math.atan2(f.tan.x, f.tan.z);
+      follow.snap(player.position, player.state.facing);
+    },
     visitAll() { markers.items.forEach((it) => { markers.setVisited(it, true); visitedIds.add(it.mem.id); }); save(); hud.setFound(foundCount()); world.setGateOpen(true); },
     get state() { return { state, u: player.state.u }; },
     trials,

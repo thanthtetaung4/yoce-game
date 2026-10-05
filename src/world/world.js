@@ -1,33 +1,37 @@
 import * as THREE from 'three';
 import { CONFIG, PALETTE } from '../config.js';
-import { ZONES, ZONE_COUNT, blendZoneColor } from './zones.js';
-import { canvasTexture, heartShape, smoothstep, clamp, ease } from '../utils.js';
+import { ZONES, ZONE_COUNT, blendZoneColor, styleOf } from './zones.js';
+import { canvasTexture, heartShape, smoothstep, ease, rng } from '../utils.js';
 
-// Ground, the path itself, month signposts, the birthday gate and the plaza.
+// Ground, the hedge maze and its floor, month signposts, the birthday gate and the plaza.
 export function createWorld(path) {
   const group = new THREE.Group();
   const hw = CONFIG.pathHalfWidth;
   const end = path.frameAt(1);
-  const zEnd = end.pos.z;
 
-  /* ---------- Ground: one big plane, tinted per month, rolling gently away from the path ---------- */
+  const maze = path.maze;
+  const H = maze.hedgeHeight;
+
+  /* ---------- Ground: one big plane, tinted per month, flat inside the maze and rolling hills around it ---------- */
   {
-    const len = -zEnd + 160, width = 240;
-    const geo = new THREE.PlaneGeometry(width, len, 60, Math.round(len / 3));
+    const size = maze.half * 2 + 150;
+    const seg = Math.round(size / 2.5);
+    const geo = new THREE.PlaneGeometry(size, size, seg, seg);
     geo.rotateX(-Math.PI / 2);
-    geo.translate(0, 0, zEnd / 2);
     const p = geo.attributes.position;
     const colors = new Float32Array(p.count * 3);
-    const c = new THREE.Color();
+    const c = new THREE.Color(), cs = new THREE.Color();
+    // soften the month-to-month seams by averaging a few nearby samples (wider out in the hills)
+    const RING = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7], [-0.7, -0.7]];
     for (let i = 0; i < p.count; i++) {
       const x = p.getX(i), z = p.getZ(i);
-      const dist = Math.abs(x - path.xAtZ(z));
+      const out = Math.max(Math.abs(x), Math.abs(z)) - maze.half;
       const hills = Math.sin(x * 0.11 + z * 0.05) * 1.3 + Math.sin(x * 0.05 - z * 0.13) * 1.6 + Math.sin(x * 0.31 + z * 0.27) * 0.25;
-      // Keep the area around the plaza flat
-      const plaza = smoothstep(10, 16, Math.hypot(x - end.pos.x, z - end.pos.z));
-      p.setY(i, (hills + 1.4) * smoothstep(hw + 3, hw + 16, dist) * plaza - 0.02);
-      const u = clamp(-z / -zEnd, 0, 1);
-      blendZoneColor(u, 'ground', c);
+      p.setY(i, (hills + 1.6) * smoothstep(3, 18, out) - 0.02);
+      const r = 5 + Math.max(0, out) * 0.6;
+      c.setRGB(0, 0, 0);
+      RING.forEach(([a, b]) => c.add(blendZoneColor(maze.cellU(x + a * r, z + b * r), 'ground', cs)));
+      c.multiplyScalar(1 / RING.length);
       const n = 1 + (Math.sin(x * 1.7) * Math.cos(z * 1.3)) * 0.035;
       colors.set([c.r * n, c.g * n, c.b * n], i * 3);
     }
@@ -37,33 +41,63 @@ export function createWorld(path) {
     group.add(ground);
   }
 
-  /* ---------- Path ribbon (cream centre, blush edges) + a soft curb ---------- */
-  function ribbon(half, y, inner, outer) {
-    const { pos, right, count } = path.samples;
-    const step = 2, rows = Math.floor((count - 1) / step) + 1;
-    const verts = [], cols = [], idx = [];
-    const ci = new THREE.Color(inner), co = new THREE.Color(outer);
-    for (let r = 0; r < rows; r++) {
-      const i = Math.min(count - 1, r * step);
-      for (const s of [-1, 0, 1]) {
-        verts.push(pos[i].x + right[i].x * half * s, y, pos[i].z + right[i].z * half * s);
-        const cc = s === 0 ? ci : co;
-        cols.push(cc.r, cc.g, cc.b);
-      }
-      if (r > 0) {
-        const a = (r - 1) * 3, b = r * 3;
-        idx.push(a, a + 1, b, a + 1, b + 1, b, a + 1, a + 2, b + 1, a + 2, b + 2, b + 1);
-      }
-    }
+  /* ---------- Maze floor (cream, with a blush border along the hedges) ---------- */
+  function floor(half, y, color) {
+    const verts = [], idx = [];
+    maze.floorRects(half).forEach((r, k) => {
+      verts.push(r.x0, y, r.z0, r.x1, y, r.z0, r.x1, y, r.z1, r.x0, y, r.z1);
+      idx.push(k * 4, k * 4 + 2, k * 4 + 1, k * 4, k * 4 + 3, k * 4 + 2);
+    });
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
-    geo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
     geo.setIndex(idx);
     geo.computeVertexNormals();
-    return new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
+    return new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color }));
   }
-  group.add(ribbon(hw + 0.45, 0.02, '#f6c9d3', '#f3b9c8'));
-  group.add(ribbon(hw, 0.04, '#fff6ef', '#fde2e3'));
+  group.add(floor(hw + 0.35, 0.02, '#f3b9c8'));
+  group.add(floor(hw, 0.04, '#fff6ef'));
+
+  /* ---------- Hedges: one box per block (darker at the roots), with leafy puffs along the tops ---------- */
+  {
+    const geo = new THREE.BoxGeometry(1, H, 1, 1, 2, 1).translate(0, H / 2, 0);
+    const shade = [];
+    for (let i = 0; i < geo.attributes.position.count; i++) {
+      const k = 0.74 + 0.26 * (geo.attributes.position.getY(i) / H);
+      shade.push(k, k, k);
+    }
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(shade, 3));
+    const mesh = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), maze.hedges.length);
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), v = new THREE.Vector3(), c = new THREE.Color();
+    const puffs = [];
+    const rand = rng(5);
+    maze.hedges.forEach((h, i) => {
+      mesh.setMatrixAt(i, m.compose(v.set(h.x, 0, h.z), q, sc.set(h.w, 1, h.d)));
+      blendZoneColor(h.u, 'hedge', c);
+      mesh.setColorAt(i, c);
+      // puffs on a loose grid over the top of the block
+      const nx = Math.max(1, Math.round(h.w / 1.5)), nz = Math.max(1, Math.round(h.d / 1.5));
+      for (let a = 0; a < nx; a++) for (let b = 0; b < nz; b++) {
+        puffs.push({
+          x: h.x - h.w / 2 + (a + 0.5) * (h.w / nx) + (rand() - 0.5) * 0.3,
+          z: h.z - h.d / 2 + (b + 0.5) * (h.d / nz) + (rand() - 0.5) * 0.3,
+          s: 0.55 + rand() * 0.3, u: h.u, r: rand() * 6, k: rand(),
+        });
+      }
+    });
+    group.add(mesh);
+    const puffMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshLambertMaterial({ flatShading: true }), puffs.length);
+    const leaf = new THREE.Color();
+    puffs.forEach((p, i) => {
+      q.setFromAxisAngle(v.set(0, 1, 0), p.r);
+      puffMesh.setMatrixAt(i, m.compose(v.set(p.x, H - 0.05, p.z), q, sc.set(p.s * 1.05, p.s * 0.6, p.s * 1.05)));
+      // mostly hedge-coloured, a few blossoms in the season's foliage colours
+      const st = styleOf(path.zoneAt(p.u));
+      blendZoneColor(p.u, 'hedge', c).multiplyScalar(1.06);
+      if (p.k < 0.22) c.lerp(leaf.set(st.foliage[Math.floor(p.k * 100) % st.foliage.length]), 0.75);
+      puffMesh.setColorAt(i, c);
+    });
+    group.add(puffMesh);
+  }
 
   /* ---------- Little heart footprints down the middle ---------- */
   {
@@ -84,7 +118,7 @@ export function createWorld(path) {
     group.add(mesh);
   }
 
-  /* ---------- Birthday plaza ---------- */
+  /* ---------- Birthday plaza (a clearing in the heart of the maze) ---------- */
   {
     const plaza = new THREE.Mesh(new THREE.CircleGeometry(8.5, 48).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: '#fff6ef' }));
     plaza.position.copy(end.pos).setY(0.045);
@@ -124,12 +158,25 @@ export function createWorld(path) {
     const face = new THREE.Mesh(faceGeo, new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
     face.position.set(0, 1.85, 0.056);
     sign.add(post, board, face);
-    const u = path.uOfZone(i, i === 0 ? 0.03 : 0.015);
-    const f = path.frameAt(u);
-    sign.position.copy(f.pos).addScaledVector(f.right, -(hw + 1.2));
-    // face back toward someone walking up the path, angled slightly toward the centre
-    const d = f.tan.clone().negate().addScaledVector(f.right, 0.45);
-    sign.rotation.y = Math.atan2(d.x, d.z);
+    // near the start of the month, beside the path, nudged along until the whole board is clear of the hedges
+    const u0 = path.uOfZone(i, i === 0 ? 0.03 : 0.015);
+    let placed = null;
+    for (const shift of [0, 1, -1, 2, -2, 3, 4, 5, 6, 7, 8]) {
+      for (const side of [-1, 1]) {
+        const f = path.frameAt(u0 + shift / path.total);
+        const p = f.pos.clone().addScaledVector(f.right, side * (hw - 1.15));
+        // face back toward someone walking up the path, angled slightly toward the centre
+        const d = f.tan.clone().negate().addScaledVector(f.right, -side * 0.3);
+        const ry = Math.atan2(d.x, d.z);
+        const across = new THREE.Vector3(Math.cos(ry), 0, -Math.sin(ry)); // the board's width
+        const ends = [1.2, -1.2].map((k) => p.clone().addScaledVector(across, k));
+        if (ends.every((q) => maze.walkable(q.x, q.z, -0.1))) { placed = { p, ry }; break; }
+      }
+      if (placed) break;
+    }
+    if (!placed) { const f = path.frameAt(u0); placed = { p: f.pos.clone().addScaledVector(f.right, -(hw - 1.15)), ry: Math.atan2(-f.tan.x, -f.tan.z) }; }
+    sign.position.copy(placed.p);
+    sign.rotation.y = placed.ry;
     group.add(sign);
     signs.push(sign);
   });
@@ -141,7 +188,7 @@ export function createWorld(path) {
     const f = path.frameAt(path.gateU);
     gate.position.copy(f.pos);
     gate.rotation.y = Math.atan2(f.tan.x, f.tan.z);
-    const span = hw + 0.5;
+    const span = hw + 0.55; // pillars stand at the edges of the gap in the hedge
     const pillarMat = new THREE.MeshLambertMaterial({ color: PALETTE.lavender });
     const pillarGeo = new THREE.CylinderGeometry(0.22, 0.26, 2.4, 10).translate(0, 1.2, 0);
     const ribbonMat = new THREE.MeshLambertMaterial({ color: '#f08fab' });

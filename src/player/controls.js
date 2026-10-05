@@ -1,8 +1,8 @@
 // Keyboard, mouse and touch input.
-// - WASD / arrows to walk (hold Shift to hurry), E / Enter / Space to open a nearby memory
+// - WASD / arrows to walk (hold Shift to hurry), E / Enter to open a nearby memory, Space for an emote
 // - Mouse: drag to look around, click to open memories
 // - Touch: a floating joystick on the left half (push it to the edge to hurry), drag on the right half to look, tap memories
-export function createControls(canvas, { onTap, onHover, onInteract }) {
+export function createControls(canvas, { onTap, onHover, onInteract, onEmote }) {
   const keys = new Set();
   const look = { dx: 0, dy: 0, active: false };
   const stick = { x: 0, y: 0, id: null, ox: 0, oy: 0, mag: 0, t: 0, far: 0 };
@@ -28,7 +28,7 @@ export function createControls(canvas, { onTap, onHover, onInteract }) {
     if (!enabled || e.target.closest?.('input, textarea')) return;
     if (KEYMAP[e.code]) { keys.add(KEYMAP[e.code]); e.preventDefault(); }
     if ((e.code === 'KeyE' || e.code === 'Enter' || e.code === 'Space') && !e.repeat) {
-      if (e.target === document.body || e.target === canvas) { e.preventDefault(); onInteract(); }
+      if (e.target === document.body || e.target === canvas) { e.preventDefault(); (e.code === 'Space' ? onEmote : onInteract)(); }
     }
   }
   const onKeyUp = (e) => { if (KEYMAP[e.code]) keys.delete(KEYMAP[e.code]); };
