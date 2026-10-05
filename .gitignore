@@ -1,0 +1,5 @@
+node_modules/
+dist/
+
+# Original photos contain EXIF GPS/location data — only the stripped web versions in public/images are committed.
+photos/

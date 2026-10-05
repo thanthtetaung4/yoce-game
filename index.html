@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>Happy 21st, Yoce</title>
+  <meta name="description" content="A little walk through Yoce's year, one memory at a time." />
+  <meta name="theme-color" content="#fde3ea" />
+  <meta property="og:title" content="Happy 21st Birthday, Yoce 🎂" />
+  <meta property="og:description" content="A little walk through your year. Find every memory on the path, then make a wish." />
+  <meta property="og:image" content="images/img-6561-960.webp" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎂</text></svg>" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <canvas id="scene" aria-label="A path through the year, with memories to find"></canvas>
+
+  <!-- Loading -->
+  <div id="loader" class="screen screen--loader" role="status" aria-live="polite">
+    <div class="loader__cake" aria-hidden="true">🎂</div>
+    <p class="loader__text">Wrapping up your year…</p>
+    <div id="loader-bar" class="bar"><span></span></div>
+    <p id="loader-pct" class="loader__pct">0%</p>
+  </div>
+
+  <!-- Title -->
+  <div id="title" class="screen screen--title" hidden>
+    <div class="title__inner">
+      <div class="title__text">
+        <p id="title-kicker" class="title__kicker"></p>
+        <h1 id="title-name" class="title__name"></h1>
+        <p id="title-headline" class="title__headline"></p>
+        <p id="title-sub" class="title__sub"></p>
+      </div>
+      <div id="title-stack" class="title__stack" aria-hidden="true">
+        <span id="title-age" class="age-badge"></span>
+      </div>
+      <div class="title__how">
+        <ul>
+          <li class="only-desktop"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrow keys to walk · hold <kbd>Shift</kbd> to hurry · drag to look around</li>
+          <li class="only-desktop">Click a glowing photo (or press <kbd>E</kbd>) to open a memory</li>
+          <li class="only-touch">Hold the left side of the screen to walk (push to the edge to hurry) · drag on the right to look</li>
+          <li class="only-touch">Tap a glowing photo to open a memory</li>
+          <li>Glowing rune stones ✦ hold little trials from the hardest months</li>
+          <li>Find every memory, then follow the path to the end ♡</li>
+        </ul>
+        <button id="start-btn" class="btn btn--primary" type="button" disabled>Start the walk</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- HUD -->
+  <div id="hud" hidden>
+    <div class="hud__left">
+      <div class="hud__pills">
+        <div class="pill hud__count"><span class="pill__heart" aria-hidden="true">♥</span><span id="hud-count" aria-live="polite"></span></div>
+        <div class="pill hud__trials"><span class="pill__star" aria-hidden="true">✦</span><span id="hud-trials"></span></div>
+      </div>
+      <div id="hud-month" class="hud__month"></div>
+      <div id="hud-task" class="pill hud__task" aria-live="polite" hidden></div>
+    </div>
+    <button id="mute-btn" class="icon-btn" type="button" aria-label="Mute sound" aria-pressed="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path class="spk" d="M4 9h3l5-4v14l-5-4H4z"/><path class="on" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"/><path class="off" d="M16 9l6 6M22 9l-6 6"/></svg>
+    </button>
+    <div id="hud-bar" class="hud__bar" aria-hidden="true"><span></span></div>
+  </div>
+  <div id="prompt" class="prompt" aria-live="polite"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="joystick" class="joystick" hidden aria-hidden="true"><div class="joystick__knob"></div></div>
+
+  <!-- Memory card -->
+  <div id="memory" class="memory" role="dialog" aria-modal="true" aria-labelledby="memory-title" hidden>
+    <article class="memory__card">
+      <button class="memory__close" type="button" aria-label="Close">×</button>
+      <div class="memory__carousel">
+        <div class="memory__viewport"><div class="memory__track"></div></div>
+        <button class="memory__prev nav-btn" type="button" aria-label="Previous photo">‹</button>
+        <button class="memory__next nav-btn" type="button" aria-label="Next photo">›</button>
+        <div class="memory__dots"></div>
+      </div>
+      <div class="memory__text">
+        <p class="memory__num"></p>
+        <p class="memory__date"></p>
+        <h2 id="memory-title" class="memory__title"></h2>
+        <p class="memory__story"></p>
+      </div>
+    </article>
+  </div>
+
+  <!-- Trial card -->
+  <div id="trial" class="memory trial" role="dialog" aria-modal="true" aria-labelledby="trial-title" hidden>
+    <article class="trial__card">
+      <div class="trial__icon" aria-hidden="true">✦</div>
+      <p class="memory__num trial__kicker"></p>
+      <h2 id="trial-title" class="memory__title"></h2>
+      <p class="memory__story trial__text"></p>
+      <p class="trial__how"></p>
+      <div class="trial__actions">
+        <button class="btn btn--primary trial__go" type="button"></button>
+        <button class="btn btn--ghost trial__later" type="button">Not now</button>
+      </div>
+    </article>
+  </div>
+
+  <!-- Ending -->
+  <div id="ending" class="ending" hidden>
+    <div class="ending__card">
+      <h2 id="ending-title" class="ending__title"></h2>
+      <p id="ending-msg" class="ending__msg"></p>
+      <p id="ending-sign" class="ending__sign"></p>
+      <button id="wish-btn" class="btn btn--primary" type="button"></button>
+      <p id="wish-done" class="wish-done" aria-live="polite"></p>
+      <button id="replay-btn" class="btn btn--ghost" type="button"></button>
+    </div>
+  </div>
+
+  <noscript><p class="noscript">This birthday walk needs JavaScript turned on. 💗</p></noscript>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
