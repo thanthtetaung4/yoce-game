@@ -3,7 +3,7 @@ import { CONFIG } from '../config.js';
 import { TRIALS } from '../data/trials.js';
 import { GAMES } from './games.js';
 import { createBurst } from './burst.js';
-import { glowTexture, rng } from '../utils.js';
+import { glowTexture, rng, pickOnScreen } from '../utils.js';
 
 // Rune stones that start the trials, plus the trials themselves.
 // Each trial's targets live in its own month of the path.
@@ -112,7 +112,7 @@ export function createTrials(path, { onProgress, onComplete }) {
       return nearest ? { item: nearest, dist: nd } : null;
     },
     // Click/tap: a rune stone, or a target in an active trial
-    pick(clientX, clientY, camera) {
+    pick(clientX, clientY, camera, tolerancePx = 0) {
       ndc.set((clientX / window.innerWidth) * 2 - 1, -(clientY / window.innerHeight) * 2 + 1);
       raycaster.setFromCamera(ndc, camera);
       const targets = [];
@@ -121,7 +121,13 @@ export function createTrials(path, { onProgress, onComplete }) {
         targets.push(it.hit);
         if (it.state === 'active') targets.push(...it.game.clickables());
       });
-      const hit = raycaster.intersectObjects(targets, false).find((h) => h.distance < 40);
+      let hit = raycaster.intersectObjects(targets, false).find((h) => h.distance < 40);
+      if (!hit && tolerancePx > 0) {
+        // forgiving finger taps: clouds/fireflies first, then the stones
+        const near = pickOnScreen(targets.filter((t) => !t.userData.item), clientX, clientY, camera, tolerancePx, 40)
+          || pickOnScreen(targets.filter((t) => t.userData.item), clientX, clientY, camera, tolerancePx, 40);
+        if (near) hit = { object: near };
+      }
       if (!hit) return null;
       if (hit.object.userData.item) return { kind: 'stone', item: hit.object.userData.item };
       const it = items.find((x) => x.state === 'active' && x.game.clickables().includes(hit.object));

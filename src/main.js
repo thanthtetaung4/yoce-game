@@ -164,16 +164,18 @@ function openMemory(it) {
 let nearest = null;
 let nearStone = null;
 const controls = createControls(canvas, {
-  onTap(x, y) {
+  onTap(x, y, pointerType) {
     if (state !== 'play') return;
-    const it = markers.pick(x, y, camera);
+    // fingers get a generous margin around photos and stones; the mouse stays precise
+    const tol = pointerType === 'mouse' ? 10 : 44;
+    const it = markers.pick(x, y, camera, tol);
     if (it) {
       const d = it.root.position.distanceTo(player.position);
       if (d < 16) openMemory(it);
       else hud.toast('Walk a little closer to open this one ♡');
       return;
     }
-    const t = trials.pick(x, y, camera);
+    const t = trials.pick(x, y, camera, tol);
     if (t?.kind === 'stone') {
       if (t.item.root.position.distanceTo(player.position) < 16) openTrial(t.item);
       else hud.toast('Walk a little closer to the rune stone ✦');
@@ -183,13 +185,16 @@ const controls = createControls(canvas, {
     if (state !== 'play') return;
     canvas.classList.toggle('is-hover', !!markers.pick(x, y, camera) || trials.hovering(x, y, camera));
   },
-  onInteract() {
-    if (state !== 'play') return;
-    const dm = nearest ? Math.hypot(nearest.root.position.x - player.position.x, nearest.root.position.z - player.position.z) : Infinity;
-    if (nearStone && nearStone.dist < dm) openTrial(nearStone.item);
-    else if (nearest) openMemory(nearest);
-  },
+  onInteract: interact,
 });
+// open whatever is close by: the E key, or tapping the prompt pill
+function interact() {
+  if (state !== 'play') return;
+  const dm = nearest ? Math.hypot(nearest.root.position.x - player.position.x, nearest.root.position.z - player.position.z) : Infinity;
+  if (nearStone && nearStone.dist < dm) openTrial(nearStone.item);
+  else if (nearest) openMemory(nearest);
+}
+hud.onPromptTap(interact);
 
 /* ---------- Ending ---------- */
 function startEnding() {
@@ -262,10 +267,10 @@ function frame(now) {
   if (state === 'play') {
     const dm = nearest ? Math.hypot(nearest.root.position.x - player.position.x, nearest.root.position.z - player.position.z) : Infinity;
     if (nearStone && nearStone.dist < dm) {
-      hud.prompt(nearStone.item.state === 'done' ? (isTouch ? '✦ Trial complete · tap to read again' : '✦ Trial complete · press E to read again')
-        : isTouch ? '✦ Tap the rune stone to begin a trial' : '✦ Click the rune stone or press E to begin');
+      hud.prompt(nearStone.item.state === 'done' ? (isTouch ? '✦ Trial complete · tap here to read again' : '✦ Trial complete · press E to read again')
+        : isTouch ? '✦ Tap here to begin the trial' : '✦ Click the rune stone or press E to begin');
     } else {
-      hud.prompt(nearest ? (nearest.visited ? 'Open this memory again ♡' : isTouch ? '✨ Tap the photo to open this memory' : '✨ Click the photo or press E') : null);
+      hud.prompt(nearest ? (nearest.visited ? 'Open this memory again ♡' : isTouch ? '✨ Tap here to open this memory' : '✨ Click the photo or press E') : null);
     }
     const zone = path.zoneAt(player.state.u);
     hud.setMonth(ZONES[zone].label);
@@ -324,7 +329,7 @@ if (import.meta.env.DEV) {
     stoneU: (i) => path.uOfZone(trials.items[i].def.zone, 0.12),
     // run n frames by hand (handy when the tab is in the background)
     step(n = 1, dt = 1 / 60) { for (let i = 0; i < n; i++) { cancelAnimationFrame(raf); const now = performance.now(); last = now - dt * 1000; frame(now); } },
-    player, camera, idle,
+    player, camera, idle, markers,
   };
 }
 

@@ -88,6 +88,35 @@ export const heartShape = () => {
   return s;
 };
 
+/* ---------- Forgiving tap picking ---------- */
+// When a ray misses, pick the mesh whose on-screen footprint is closest to the tap,
+// as long as the tap lands within `tolerancePx` of it. Small or distant things become easy to hit with a finger.
+const _c = new THREE.Vector3(), _e = new THREE.Vector3(), _s = new THREE.Vector3(), _right = new THREE.Vector3();
+export function pickOnScreen(meshes, clientX, clientY, camera, tolerancePx = 36, maxDistance = 40) {
+  let best = null, bestScore = Infinity;
+  const w = window.innerWidth, h = window.innerHeight;
+  _right.setFromMatrixColumn(camera.matrixWorld, 0);
+  for (const m of meshes) {
+    const g = m.geometry;
+    if (!g.boundingSphere) g.computeBoundingSphere();
+    m.getWorldPosition(_c);
+    if (_c.distanceTo(camera.position) > maxDistance) continue;
+    m.getWorldScale(_s);
+    const r = g.boundingSphere.radius * Math.max(_s.x, _s.y, _s.z);
+    _c.add(_e.copy(g.boundingSphere.center).multiply(_s)); // (centres are at the origin for our hit meshes)
+    _e.copy(_c).addScaledVector(_right, r);
+    _c.project(camera); _e.project(camera);
+    if (_c.z > 1) continue; // behind the camera
+    const sx = (_c.x + 1) / 2 * w, sy = (1 - _c.y) / 2 * h;
+    const rPx = Math.hypot(((_e.x + 1) / 2 * w) - sx, ((1 - _e.y) / 2 * h) - sy);
+    const d = Math.hypot(clientX - sx, clientY - sy);
+    if (d > rPx + tolerancePx) continue;
+    const score = d - rPx; // how far outside its footprint the tap landed (negative = inside)
+    if (score < bestScore) { bestScore = score; best = m; }
+  }
+  return best;
+}
+
 /* ---------- Cleanup ---------- */
 export function disposeObject(root) {
   root.traverse((o) => {

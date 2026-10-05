@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CONFIG, PALETTE } from '../config.js';
-import { photoInfo, photoSrc, canvasTexture, glowTexture, placeholderTexture, heartShape, damp, dampAngle } from '../utils.js';
+import { photoInfo, photoSrc, canvasTexture, glowTexture, placeholderTexture, heartShape, damp, dampAngle, pickOnScreen } from '../utils.js';
 
 // Floating polaroids along the path. They glow when you get close and get a heart once visited.
 export function createMemoryMarkers(path, memories, manager) {
@@ -139,11 +139,15 @@ export function createMemoryMarkers(path, memories, manager) {
       }
       return nearest;
     },
-    pick(clientX, clientY, camera) {
+    // tolerancePx > 0 also accepts taps that land just outside a photo (for fingers)
+    pick(clientX, clientY, camera, tolerancePx = 0) {
       ndc.set((clientX / window.innerWidth) * 2 - 1, -(clientY / window.innerHeight) * 2 + 1);
       raycaster.setFromCamera(ndc, camera);
-      const hit = raycaster.intersectObjects(hitMeshes.filter((m) => m.parent.parent.visible), false)[0];
-      return hit ? items[hit.object.userData.index] : null;
+      const visible = hitMeshes.filter((m) => m.parent.parent.visible);
+      const hit = raycaster.intersectObjects(visible, false)[0];
+      if (hit) return items[hit.object.userData.index];
+      const near = tolerancePx > 0 ? pickOnScreen(visible, clientX, clientY, camera, tolerancePx, 45) : null;
+      return near ? items[near.userData.index] : null;
     },
     setVisited(it, v) {
       it.visited = v;

@@ -44,6 +44,10 @@ export function createHud({ total, trialsTotal, onMute, muted }) {
       task.classList.toggle('is-done', done);
     },
     setProgress(u) { bar.style.transform = `scaleX(${Math.max(0, Math.min(1, u))})`; },
+    // the prompt pill is a button: tapping it opens whatever is nearby
+    onPromptTap(cb) {
+      prompt.addEventListener('click', (e) => { if (prompt.classList.contains('is-visible')) { e.preventDefault(); cb(); } });
+    },
     prompt(text) {
       if (text) prompt.textContent = text;
       prompt.classList.toggle('is-visible', !!text);
